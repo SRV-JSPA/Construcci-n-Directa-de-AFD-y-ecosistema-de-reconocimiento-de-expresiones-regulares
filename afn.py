@@ -234,74 +234,62 @@ def infix_a_postfix():
     
     return expresiones_a_postfix
 
-
 class Nodo:
-    def __init__(self, valor, posicion=None):
+    contador_posicion = 1 
+
+    def __init__(self, valor, anulable=None, posicion=None):
         self.valor = valor
-        self.posicion = posicion  
+        self.posicion = posicion if valor not in ['|', '.', '*', '+', '?'] else None  
+
+        if anulable is None:
+            self.anulable = (valor == 'ε')  
+        else:
+            self.anulable = anulable
+
         self.nodo_id = None  
 
     def __repr__(self):
-        return f"Nodo(valor={self.valor}, posicion={self.posicion})"
+        return f"Nodo(valor={self.valor}, posicion={self.posicion}, anulable={self.anulable})"
 
 class NodoBinario(Nodo):
     def __init__(self, valor, izquierda, derecha):
-        super().__init__(valor)
         self.izquierda = izquierda
         self.derecha = derecha
+        anulable = False
+
+        if valor == '|': 
+            anulable = izquierda.anulable or derecha.anulable  
+        elif valor == '.':  
+            anulable = izquierda.anulable and derecha.anulable  
+
+        super().__init__(valor, anulable, None)  
 
     def __repr__(self):
-        return f"NodoBinario(valor={self.valor}, izquierda={self.izquierda}, derecha={self.derecha})"
+        return f"NodoBinario(valor={self.valor}, anulable={self.anulable})"
 
 class NodoUnario(Nodo):
     def __init__(self, valor, operando):
-        super().__init__(valor)
         self.operando = operando
+        anulable = False
+
+        if valor == '*':  
+            anulable = True
+        elif valor == '+':  
+            anulable = operando.anulable
+        elif valor == '?':  
+            anulable = True
+
+        super().__init__(valor, anulable, None)  
 
     def __repr__(self):
-        return f"NodoUnario(valor={self.valor}, operando={self.operando})"
+        return f"NodoUnario(valor={self.valor}, anulable={self.anulable})"
 
-posicion = 1  
-
-def agregar_nodo(dot, nodo, nodo_id, posiciones):
-    global posicion
-    if isinstance(nodo, NodoBinario):
-        operador_id = nodo_id + '_operador'
-        izquierda_id = nodo_id + '_izquierda'
-        derecha_id = nodo_id + '_derecha'
-        dot.node(operador_id, f'{nodo.valor}')
-        dot.edge(operador_id, agregar_nodo(dot, nodo.izquierda, izquierda_id, posiciones))
-        dot.edge(operador_id, agregar_nodo(dot, nodo.derecha, derecha_id, posiciones))
-        return operador_id
-    elif isinstance(nodo, NodoUnario):
-        operador_id = nodo_id + '_operador'
-        operando_id = nodo_id + '_operando'
-        dot.node(operador_id, f'{nodo.valor}')
-        dot.edge(operador_id, agregar_nodo(dot, nodo.operando, operando_id, posiciones))
-        return operador_id
-    else:
-        hoja_id = f'{nodo_id}_hoja'
-        nodo.nodo_id = hoja_id  
-        posiciones[hoja_id] = posicion  
-        dot.node(hoja_id, f'{nodo.valor} ({posicion})')  
-        posicion += 1  
-        return hoja_id
-
-def grafo(cadena, nombre_archivo):
-    dot = Graph()
+def construir_arbol(expresion_postfix):
     stack = []
     operadores_binarios = ['|', '.']
-    operadores_unarios = ['*']
-    
-    nodo_id = 0
-    posiciones = {}  
+    operadores_unarios = ['*', '+', '?']
 
-    def nuevo_nodo_id():
-        nonlocal nodo_id
-        nodo_id += 1
-        return f'n{nodo_id}'
-    
-    for char in cadena:
+    for char in expresion_postfix:
         if char in operadores_binarios:
             if len(stack) >= 2:
                 derecha = stack.pop()
@@ -314,17 +302,53 @@ def grafo(cadena, nombre_archivo):
                 nodo_unario = NodoUnario(char, operando)
                 stack.append(nodo_unario)
         else:
-            stack.append(Nodo(char))
+            
+            posicion = Nodo.contador_posicion if char != 'ε' else None
+            if char != 'ε':
+                Nodo.contador_posicion += 1
+            stack.append(Nodo(char, posicion=posicion))  
 
-    if stack:
-        agregar_nodo(dot, stack.pop(), nuevo_nodo_id(), posiciones)
+    return stack.pop() if stack else None  
+
+def agregar_nodo(dot, nodo, nodo_id):
+    if isinstance(nodo, NodoBinario):
+        operador_id = nodo_id + '_operador'
+        izquierda_id = nodo_id + '_izquierda'
+        derecha_id = nodo_id + '_derecha'
+        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}')
+        dot.edge(operador_id, agregar_nodo(dot, nodo.izquierda, izquierda_id))
+        dot.edge(operador_id, agregar_nodo(dot, nodo.derecha, derecha_id))
+        return operador_id
+    elif isinstance(nodo, NodoUnario):
+        operador_id = nodo_id + '_operador'
+        operando_id = nodo_id + '_operando'
+        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}')
+        dot.edge(operador_id, agregar_nodo(dot, nodo.operando, operando_id))
+        return operador_id
+    else:
+        hoja_id = f'{nodo_id}_hoja'
+        nodo.nodo_id = hoja_id  
+        dot.node(hoja_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPos: {nodo.posicion}')
+        return hoja_id
+
+def grafo(expresion_postfix, nombre_archivo):
+    dot = Graph()
+    nodo_id = 0
+
+    def nuevo_nodo_id():
+        nonlocal nodo_id
+        nodo_id += 1
+        return f'n{nodo_id}'
+    
+    raiz = construir_arbol(expresion_postfix)
+    if raiz:
+        agregar_nodo(dot, raiz, nuevo_nodo_id())
 
     dot.render(nombre_archivo, format='png', view=True)
     dot.save(f'{nombre_archivo}.dot')
 
-    print("Posiciones de las hojas:", posiciones)
+    print(f"Anulabilidad de la expresión '{expresion_postfix}': {raiz.anulable}")
     print('---------\n')
-
 
 expresiones_postfix = infix_a_postfix()
 if expresiones_postfix != 'La cadena no está balanceada':

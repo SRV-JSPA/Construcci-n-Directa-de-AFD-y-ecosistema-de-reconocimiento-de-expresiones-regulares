@@ -240,7 +240,8 @@ class Nodo:
     def __init__(self, valor, anulable=None, posicion=None):
         self.valor = valor
         self.posicion = posicion if valor not in ['|', '.', '*', '+', '?'] else None  
-        self.primeraPos = {self.posicion} if self.posicion is not None else set()  
+        self.primeraPos = {self.posicion} if self.posicion is not None else set() 
+        self.ultimaPos = {self.posicion} if self.posicion is not None else set() 
 
         if anulable is None:
             self.anulable = (valor == 'ε')  
@@ -250,7 +251,7 @@ class Nodo:
         self.nodo_id = None  
 
     def __repr__(self):
-        return f"Nodo(valor={self.valor}, posicion={self.posicion}, primeraPos={self.primeraPos}, anulable={self.anulable})"
+        return f"Nodo(valor={self.valor}, posicion={self.posicion}, primeraPos={self.primeraPos}, ultimaPos={self.ultimaPos}, anulable={self.anulable})"
 
 class NodoBinario(Nodo):
     def __init__(self, valor, izquierda, derecha):
@@ -259,19 +260,26 @@ class NodoBinario(Nodo):
         
         if valor == '|': 
             anulable = izquierda.anulable or derecha.anulable  
-            primeraPos = izquierda.primeraPos.union(derecha.primeraPos)  
+            primeraPos = izquierda.primeraPos.union(derecha.primeraPos)
+            ultimaPos = izquierda.ultimaPos.union(derecha.ultimaPos)    
         elif valor == '.':  
             anulable = izquierda.anulable and derecha.anulable  
             if izquierda.anulable:
                 primeraPos = izquierda.primeraPos.union(derecha.primeraPos)  
+                ultimaPos = derecha.ultimaPos
             else:
-                primeraPos = izquierda.primeraPos  
+                primeraPos = izquierda.primeraPos
+                ultimaPos = derecha.ultimaPos
+
+            if derecha.anulable:
+                ultimaPos = izquierda.ultimaPos
 
         super().__init__(valor, anulable, None)  
         self.primeraPos = primeraPos  
+        self.ultimaPos = ultimaPos
 
     def __repr__(self):
-        return f"NodoBinario(valor={self.valor}, primeraPos={self.primeraPos}, anulable={self.anulable})"
+        return f"NodoBinario(valor={self.valor}, primeraPos={self.primeraPos}, ultimaPos={self.ultimaPos}, anulable={self.anulable})"
 
 class NodoUnario(Nodo):
     def __init__(self, valor, operando):
@@ -285,12 +293,14 @@ class NodoUnario(Nodo):
             anulable = True
 
         primeraPos = operando.primeraPos 
+        ultimaPos = operando.ultimaPos
 
         super().__init__(valor, anulable, None)  
         self.primeraPos = primeraPos  
+        self.ultimaPosPos = ultimaPos  
 
     def __repr__(self):
-        return f"NodoUnario(valor={self.valor}, primeraPos={self.primeraPos}, anulable={self.anulable})"
+        return f"NodoUnario(valor={self.valor}, primeraPos={self.primeraPos}, ultimaPos={self.ultimaPos}, anulable={self.anulable})"
 
 def construir_arbol(expresion_postfix):
     stack = []
@@ -322,20 +332,20 @@ def agregar_nodo(dot, nodo, nodo_id):
         operador_id = nodo_id + '_operador'
         izquierda_id = nodo_id + '_izquierda'
         derecha_id = nodo_id + '_derecha'
-        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}')
+        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
         dot.edge(operador_id, agregar_nodo(dot, nodo.izquierda, izquierda_id))
         dot.edge(operador_id, agregar_nodo(dot, nodo.derecha, derecha_id))
         return operador_id
     elif isinstance(nodo, NodoUnario):
         operador_id = nodo_id + '_operador'
         operando_id = nodo_id + '_operando'
-        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}')
+        dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
         dot.edge(operador_id, agregar_nodo(dot, nodo.operando, operando_id))
         return operador_id
     else:
         hoja_id = f'{nodo_id}_hoja'
         nodo.nodo_id = hoja_id  
-        dot.node(hoja_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPos: {nodo.posicion}\nPrimeraPos: {nodo.primeraPos}')
+        dot.node(hoja_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPos: {nodo.posicion}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
         return hoja_id
 
 def grafo(expresion_postfix, nombre_archivo):
@@ -356,7 +366,9 @@ def grafo(expresion_postfix, nombre_archivo):
 
     print(f"Anulabilidad de la expresión '{expresion_postfix}': {raiz.anulable}")
     print(f"PrimeraPos de la raíz: {raiz.primeraPos}")
+    print(f"UltimaPos de la raíz: {raiz.ultimaPos}")
     print('---------\n')
+
 
 expresiones_postfix = infix_a_postfix()
 if expresiones_postfix != 'La cadena no está balanceada':

@@ -324,26 +324,50 @@ def construir_arbol(expresion_postfix):
 
     return stack.pop() if stack else None  
 
-def agregar_nodo(dot, nodo, nodo_id):
+def agregar_nodo(dot, nodo, nodo_id, siguientePos):
     if isinstance(nodo, NodoBinario):
         operador_id = nodo_id + '_operador'
         izquierda_id = nodo_id + '_izquierda'
         derecha_id = nodo_id + '_derecha'
         dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
-        dot.edge(operador_id, agregar_nodo(dot, nodo.izquierda, izquierda_id))
-        dot.edge(operador_id, agregar_nodo(dot, nodo.derecha, derecha_id))
+        dot.edge(operador_id, agregar_nodo(dot, nodo.izquierda, izquierda_id, siguientePos))
+        dot.edge(operador_id, agregar_nodo(dot, nodo.derecha, derecha_id, siguientePos))
         return operador_id
     elif isinstance(nodo, NodoUnario):
         operador_id = nodo_id + '_operador'
         operando_id = nodo_id + '_operando'
         dot.node(operador_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
-        dot.edge(operador_id, agregar_nodo(dot, nodo.operando, operando_id))
+        dot.edge(operador_id, agregar_nodo(dot, nodo.operando, operando_id, siguientePos))
         return operador_id
     else:
         hoja_id = f'{nodo_id}_hoja'
         nodo.nodo_id = hoja_id  
-        dot.node(hoja_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPos: {nodo.posicion}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}')
+        siguiente = siguientePos.get(nodo.posicion, set())
+        siguiente_str = f'{siguiente}' if siguiente else '{}'  
+        dot.node(hoja_id, f'{nodo.valor}\nAnulable: {nodo.anulable}\nPos: {nodo.posicion}\nPrimeraPos: {nodo.primeraPos}\nUltimaPos: {nodo.ultimaPos}\nSiguientePos: {siguiente_str}')
         return hoja_id
+
+def calcular_siguiente_pos(raiz):
+    siguientePos = defaultdict(set)
+
+    def recorrer_nodo(nodo):
+        if isinstance(nodo, NodoBinario):
+            recorrer_nodo(nodo.izquierda)
+            recorrer_nodo(nodo.derecha)
+
+            if nodo.valor == '.':  
+                for pos in nodo.izquierda.ultimaPos:
+                    siguientePos[pos].update(nodo.derecha.primeraPos)
+
+        elif isinstance(nodo, NodoUnario):
+            recorrer_nodo(nodo.operando)
+
+            if nodo.valor == '*':  
+                for pos in nodo.ultimaPos:
+                    siguientePos[pos].update(nodo.primeraPos)
+
+    recorrer_nodo(raiz)
+    return siguientePos
 
 def grafo(expresion_postfix, nombre_archivo):
     dot = Graph()
@@ -356,7 +380,8 @@ def grafo(expresion_postfix, nombre_archivo):
     
     raiz = construir_arbol(expresion_postfix)
     if raiz:
-        agregar_nodo(dot, raiz, nuevo_nodo_id())
+        siguientePos = calcular_siguiente_pos(raiz)  
+        agregar_nodo(dot, raiz, nuevo_nodo_id(), siguientePos)
 
     dot.render(nombre_archivo, format='png', view=True)
     dot.save(f'{nombre_archivo}.dot')

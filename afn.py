@@ -264,19 +264,16 @@ class NodoBinario(Nodo):
             ultimaPos = izquierda.ultimaPos.union(derecha.ultimaPos)    
         elif valor == '.':  
             anulable = izquierda.anulable and derecha.anulable  
-            if izquierda.anulable:
-                primeraPos = izquierda.primeraPos.union(derecha.primeraPos)  
-                ultimaPos = derecha.ultimaPos
-            else:
-                primeraPos = izquierda.primeraPos
-                ultimaPos = derecha.ultimaPos
-
+            primeraPos = izquierda.primeraPos if not izquierda.anulable else izquierda.primeraPos.union(derecha.primeraPos)
+            
             if derecha.anulable:
-                ultimaPos = izquierda.ultimaPos
+                ultimaPos = izquierda.ultimaPos.union(derecha.ultimaPos)
+            else:
+                ultimaPos = derecha.ultimaPos  
 
         super().__init__(valor, anulable, None)  
         self.primeraPos = primeraPos  
-        self.ultimaPos = ultimaPos
+        self.ultimaPos = ultimaPos 
 
     def __repr__(self):
         return f"NodoBinario(valor={self.valor}, primeraPos={self.primeraPos}, ultimaPos={self.ultimaPos}, anulable={self.anulable})"
@@ -293,11 +290,11 @@ class NodoUnario(Nodo):
             anulable = True
 
         primeraPos = operando.primeraPos 
-        ultimaPos = operando.ultimaPos
+        ultimaPos = operando.ultimaPos  
 
         super().__init__(valor, anulable, None)  
         self.primeraPos = primeraPos  
-        self.ultimaPosPos = ultimaPos  
+        self.ultimaPos = ultimaPos   
 
     def __repr__(self):
         return f"NodoUnario(valor={self.valor}, primeraPos={self.primeraPos}, ultimaPos={self.ultimaPos}, anulable={self.anulable})"

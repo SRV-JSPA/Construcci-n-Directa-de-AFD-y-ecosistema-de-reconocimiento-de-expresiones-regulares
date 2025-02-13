@@ -391,7 +391,7 @@ def grafo(expresion_postfix, nombre_archivo):
     print(f"UltimaPos de la raíz: {raiz.ultimaPos}")
     print('---------\n')
 
-def construir_dfa(raiz, expresion):
+def construir_afd(raiz, expresion):
     Dstates = []
     simbolos_pos = {}  
     
@@ -446,20 +446,20 @@ def construir_dfa(raiz, expresion):
         'simbolos': simbolos_pos
     }
 
-def visualizar_dfa(dfa, nombre_archivo):
+def visualizar_afd(afd, nombre_archivo):
     dot = pgv.AGraph(directed=True)
     
-    estado_a_nombre = {estado: f'q{i}' for i, estado in enumerate(dfa['estados'])}
+    estado_a_nombre = {estado: f'q{i}' for i, estado in enumerate(afd['estados'])}
     
-    for estado in dfa['estados']:
+    for estado in afd['estados']:
         attrs = {'shape': 'circle'}
-        if estado == dfa['estado_inicial']:
+        if estado == afd['estado_inicial']:
             attrs['style'] = 'bold'
-        if estado in dfa['estados_finales']:
+        if estado in afd['estados_finales']:
             attrs['shape'] = 'doublecircle'
         dot.add_node(estado_a_nombre[estado], **attrs)
     
-    for (origen, simbolo), destino in dfa['transiciones'].items():
+    for (origen, simbolo), destino in afd['transiciones'].items():
         dot.add_edge(estado_a_nombre[origen], estado_a_nombre[destino], label=simbolo)
     
     dot.layout(prog='dot')
@@ -483,14 +483,14 @@ def procesar_expresion(expresion_postfix, nombre_archivo):
     dot.render(f'grafo_no_dirigido_{nombre_archivo}', format='png', view=True)
     dot.save(f'grafo_no_dirigido_{nombre_archivo}.dot')
     
-    dfa = construir_dfa(raiz, expresion_postfix)
+    afd = construir_afd(raiz, expresion_postfix)
     
-    visualizar_dfa(dfa, f'dfa_{nombre_archivo}')
+    visualizar_afd(afd, f'afd_{nombre_archivo}')
     
-    return dfa
+    return afd
 
 expresiones_postfix = infix_a_postfix()
 if expresiones_postfix != 'La cadena no está balanceada':
     for i, cadena in enumerate(expresiones_postfix):
         print(f'Analizando la expresión {cadena}\n')
-        dfa = procesar_expresion(cadena, f'expresion_{i}')
+        afd = procesar_expresion(cadena, f'expresion_{i}')

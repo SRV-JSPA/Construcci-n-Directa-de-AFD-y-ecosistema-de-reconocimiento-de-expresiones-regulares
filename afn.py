@@ -391,9 +391,106 @@ def grafo(expresion_postfix, nombre_archivo):
     print(f"UltimaPos de la raíz: {raiz.ultimaPos}")
     print('---------\n')
 
+def construir_dfa(raiz, expresion):
+    Dstates = []
+    simbolos_pos = {}  
+    
+    def obtener_simbolos(nodo):
+        if isinstance(nodo, (NodoBinario, NodoUnario)):
+            if isinstance(nodo, NodoBinario):
+                obtener_simbolos(nodo.izquierda)
+                obtener_simbolos(nodo.derecha)
+            else:
+                obtener_simbolos(nodo.operando)
+        elif nodo.posicion is not None:
+            simbolos_pos[nodo.posicion] = nodo.valor
+    
+    obtener_simbolos(raiz)
+    siguientePos = calcular_siguiente_pos(raiz)
+    
+    estado_inicial = frozenset(raiz.primeraPos)
+    Dstates.append(estado_inicial)
+    estados_marcados = set()
+    
+    simbolos = set(v for k, v in simbolos_pos.items() if v != '#')
+    
+    transiciones = {}
+    
+    while len(estados_marcados) < len(Dstates):
+        estado_actual = next(iter(set(Dstates) - estados_marcados))
+        estados_marcados.add(estado_actual)
+        
+        for simbolo in simbolos:
+            pos_simbolo = {pos for pos, sym in simbolos_pos.items() if sym == simbolo}
+            
+            U = set()
+            for pos in estado_actual:
+                if pos in pos_simbolo:
+                    U.update(siguientePos.get(pos, set()))
+            
+            if U:  
+                U = frozenset(U)
+                if U not in Dstates:
+                    Dstates.append(U)
+                
+                transiciones[(estado_actual, simbolo)] = U
+    
+    pos_aceptacion = max(simbolos_pos.keys()) 
+    estados_finales = [estado for estado in Dstates if pos_aceptacion in estado]
+    
+    return {
+        'estados': Dstates,
+        'estado_inicial': estado_inicial,
+        'estados_finales': estados_finales,
+        'transiciones': transiciones,
+        'simbolos': simbolos_pos
+    }
+
+def visualizar_dfa(dfa, nombre_archivo):
+    dot = pgv.AGraph(directed=True)
+    
+    estado_a_nombre = {estado: f'q{i}' for i, estado in enumerate(dfa['estados'])}
+    
+    for estado in dfa['estados']:
+        attrs = {'shape': 'circle'}
+        if estado == dfa['estado_inicial']:
+            attrs['style'] = 'bold'
+        if estado in dfa['estados_finales']:
+            attrs['shape'] = 'doublecircle'
+        dot.add_node(estado_a_nombre[estado], **attrs)
+    
+    for (origen, simbolo), destino in dfa['transiciones'].items():
+        dot.add_edge(estado_a_nombre[origen], estado_a_nombre[destino], label=simbolo)
+    
+    dot.layout(prog='dot')
+    dot.draw(f'{nombre_archivo}.png')
+    
+def procesar_expresion(expresion_postfix, nombre_archivo):
+    Nodo.contador_posicion = 1
+    
+    raiz = construir_arbol(expresion_postfix)
+    if not raiz:
+        return None
+        
+    print(f"Anulabilidad de la expresión '{expresion_postfix}': {raiz.anulable}")
+    print(f"PrimeraPos de la raíz: {raiz.primeraPos}")
+    print(f"UltimaPos de la raíz: {raiz.ultimaPos}")
+    print('---------\n')
+    
+    dot = Graph()
+    siguientePos = calcular_siguiente_pos(raiz)
+    agregar_nodo(dot, raiz, 'n1', siguientePos)
+    dot.render(f'grafo_no_dirigido_{nombre_archivo}', format='png', view=True)
+    dot.save(f'grafo_no_dirigido_{nombre_archivo}.dot')
+    
+    dfa = construir_dfa(raiz, expresion_postfix)
+    
+    visualizar_dfa(dfa, f'dfa_{nombre_archivo}')
+    
+    return dfa
 
 expresiones_postfix = infix_a_postfix()
 if expresiones_postfix != 'La cadena no está balanceada':
     for i, cadena in enumerate(expresiones_postfix):
         print(f'Analizando la expresión {cadena}\n')
-        grafo(cadena, f'grafo_no_dirigido_{i}')
+        dfa = procesar_expresion(cadena, f'expresion_{i}')

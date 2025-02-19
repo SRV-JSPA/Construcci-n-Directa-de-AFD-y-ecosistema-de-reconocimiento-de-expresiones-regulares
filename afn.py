@@ -445,6 +445,112 @@ def construir_afd(raiz, expresion):
         'transiciones': transiciones,
         'simbolos': simbolos_pos
     }
+    
+def minimizar_afd(afd):
+    particiones = []
+    estados_no_finales = [estado for estado in afd['estados'] if estado not in afd['estados_finales']]
+    if estados_no_finales:
+        particiones.append(estados_no_finales)
+    if afd['estados_finales']:
+        particiones.append(afd['estados_finales'])
+
+
+    simbolos = set(sym for pos, sym in afd['simbolos'].items() if sym != '#')
+
+    cambio = True
+    while cambio:
+        cambio = False
+        nuevas_particiones = []
+        
+        for bloque in particiones:
+            particiones_temp = {}
+            for estado in bloque:
+                destinos = []
+                for simbolo in simbolos:
+                    destino = None
+                    for (origen, sym), dest in afd['transiciones'].items():
+                        if origen == estado and sym == simbolo:
+                            destino = dest
+                            break
+
+                    if destino is not None:
+                        for idx, particion in enumerate(particiones):
+                            if destino in particion:
+                                destinos.append((simbolo, idx))
+                                break
+                
+                destinos_tuple = tuple(sorted(destinos))
+                if destinos_tuple not in particiones_temp:
+                    particiones_temp[destinos_tuple] = []
+                particiones_temp[destinos_tuple].append(estado)
+            
+            if len(particiones_temp) > 1:
+                cambio = True
+                nuevas_particiones.extend(particiones_temp.values())
+            else:
+                nuevas_particiones.append(bloque)
+        
+        particiones = nuevas_particiones
+
+    estado_a_particion = {}
+    for i, particion in enumerate(particiones):
+        for estado in particion:
+            estado_a_particion[estado] = frozenset(particion)
+
+    nuevos_estados = [frozenset(p) for p in particiones]
+    nuevo_estado_inicial = estado_a_particion[afd['estado_inicial']]
+    nuevos_estados_finales = []
+    for estado_final in afd['estados_finales']:
+        particion = estado_a_particion[estado_final]
+        if particion not in nuevos_estados_finales:
+            nuevos_estados_finales.append(particion)
+
+    nuevas_transiciones = {}
+    for particion in particiones:
+        estado_repr = next(iter(particion))  
+        for simbolo in simbolos:
+            for (origen, sym), destino in afd['transiciones'].items():
+                if origen == estado_repr and sym == simbolo:
+                    nueva_origen = estado_a_particion[origen]
+                    nuevo_destino = estado_a_particion[destino]
+                    nuevas_transiciones[(nueva_origen, simbolo)] = nuevo_destino
+                    break
+
+    return {
+        'estados': nuevos_estados,
+        'estado_inicial': nuevo_estado_inicial,
+        'estados_finales': nuevos_estados_finales,
+        'transiciones': nuevas_transiciones,
+        'simbolos': afd['simbolos']
+    }
+
+def visualizar_afd_minimizado(afd_min, nombre_archivo):
+    dot = pgv.AGraph(directed=True)
+    dot.graph_attr.update(rankdir='LR')
+    
+    estado_a_nombre = {estado: f'q{i}' for i, estado in enumerate(afd_min['estados'])}
+    
+    for estado in afd_min['estados']:
+        attrs = {
+            'shape': 'circle',
+            'style': 'filled',
+            'fillcolor': 'white'
+        }
+        if estado == afd_min['estado_inicial']:
+            attrs['style'] = 'filled,bold'
+        if estado in afd_min['estados_finales']:
+            attrs['fillcolor'] = 'lightblue'
+            attrs['shape'] = 'doublecircle'
+            
+        dot.add_node(estado_a_nombre[estado], **attrs)
+    
+    # Add edges
+    for (origen, simbolo), destino in afd_min['transiciones'].items():
+        dot.add_edge(estado_a_nombre[origen], estado_a_nombre[destino], label=simbolo)
+    
+    dot.layout(prog='dot')
+    dot.draw(f'{nombre_archivo}_minimizado.png')
+    dot.write(f'{nombre_archivo}_minimizado.dot')
 
 def visualizar_afd(afd, nombre_archivo):
     dot = pgv.AGraph(directed=True)
@@ -465,9 +571,54 @@ def visualizar_afd(afd, nombre_archivo):
     dot.layout(prog='dot')
     dot.draw(f'{nombre_archivo}.png')
     
-def procesar_expresion(expresion_postfix, nombre_archivo):
-    Nodo.contador_posicion = 1
+def simular_cadena_afd(afd, cadena, verbose=False):
+    estado_actual = afd['estado_inicial']
     
+    if verbose:
+        print(f"\nSimulando cadena: '{cadena}'")
+        print(f"Estado inicial: {estado_actual}")
+    
+    for i, simbolo in enumerate(cadena):
+        if verbose:
+            print(f"\nPaso {i + 1}:")
+            print(f"  Símbolo actual: '{simbolo}'")
+            print(f"  Estado actual: {estado_actual}")
+        
+        siguiente_estado = None
+        for (origen, sim), destino in afd['transiciones'].items():
+            if origen == estado_actual and sim == simbolo:
+                siguiente_estado = destino
+                break
+        
+        if siguiente_estado is None:
+            if verbose:
+                print(f"  No hay transición válida para '{simbolo}' desde {estado_actual}")
+                print("  Cadena RECHAZADA")
+            return False
+        
+        estado_actual = siguiente_estado
+        if verbose:
+            print(f"  Nuevo estado: {estado_actual}")
+    
+    es_aceptada = estado_actual in afd['estados_finales']
+    
+    if verbose:
+        print("\nResultado final:")
+        print(f"  Estado final: {estado_actual}")
+        print(f"  Cadena {'ACEPTADA' if es_aceptada else 'RECHAZADA'}")
+    
+    return es_aceptada
+
+def probar_cadenas_en_afd(afd, cadenas_prueba):
+    print("\nPruebas de simulación del AFD:")
+    print("-" * 50)
+    for cadena in cadenas_prueba:
+        resultado = simular_cadena_afd(afd, cadena, verbose=True)
+        print(f"\nResumen: Cadena '{cadena}' -> {'ACEPTADA' if resultado else 'RECHAZADA'}")
+        print("-" * 50)
+    
+def procesar_expresion(expresion_postfix, nombre_archivo, cadenas_prueba=None):
+    Nodo.contador_posicion = 1
     raiz = construir_arbol(expresion_postfix)
     if not raiz:
         return None
@@ -484,13 +635,30 @@ def procesar_expresion(expresion_postfix, nombre_archivo):
     dot.save(f'grafo_no_dirigido_{nombre_archivo}.dot')
     
     afd = construir_afd(raiz, expresion_postfix)
-    
     visualizar_afd(afd, f'afd_{nombre_archivo}')
     
-    return afd
+    afd_minimizado = minimizar_afd(afd)
+    visualizar_afd_minimizado(afd_minimizado, nombre_archivo)
+    
+    if cadenas_prueba:
+        probar_cadenas_en_afd(afd_minimizado, cadenas_prueba)
+    
+    return afd_minimizado
 
-expresiones_postfix = infix_a_postfix()
-if expresiones_postfix != 'La cadena no está balanceada':
-    for i, cadena in enumerate(expresiones_postfix):
-        print(f'Analizando la expresión {cadena}\n')
-        afd = procesar_expresion(cadena, f'expresion_{i}')
+def main():
+    expresiones_postfix = infix_a_postfix()
+    if expresiones_postfix != 'La cadena no está balanceada':
+        for i, expresion in enumerate(expresiones_postfix):
+            print(f'\nAnalizando la expresión: {expresion}')
+            
+            cadenas_prueba = [
+                'aaabb',
+                '',
+                'a'
+            ]
+            
+            print(f"\nProbando cadenas para la expresión: {expresion}")
+            afd = procesar_expresion(expresion, f'expresion_{i}', cadenas_prueba)
+
+if __name__ == "__main__":
+    main()

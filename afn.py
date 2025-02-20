@@ -1,3 +1,7 @@
+# Hay partes del código que fueron reutilizadas del proyecto 1 de la clase de teoría de la computación
+# El código reutilizado pertenece al repositorio "Proyecto1_TC", adjunto link: https://github.com/SRV-JSPA/Proyecto1_TC.git
+# El repositorio pertenece a Santiago Pereira 22318 y Gabriela Mazariegos 22513
+
 from graphviz import Graph
 import pygraphviz as pgv
 from collections import deque, defaultdict
